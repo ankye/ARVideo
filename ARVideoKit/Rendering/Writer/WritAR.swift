@@ -11,23 +11,28 @@ import CoreImage
 import UIKit
 
 @available(iOS 11.0, *)
-class WritAR: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate {
+class WritAR: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, AVCaptureAudioDataOutputSampleBufferDelegate {
     private var assetWriter: AVAssetWriter!
     private var videoInput: AVAssetWriterInput!
     private var audioInput: AVAssetWriterInput!
+    
+//    private var currentVideoInput: AVCaptureDeviceInput?
+//    private var currentAudioInput: AVCaptureDeviceInput?
+    
     private var session: AVCaptureSession!
     
     private var pixelBufferInput: AVAssetWriterInputPixelBufferAdaptor!
     private var videoOutputSettings: Dictionary<String, AnyObject>!
     private var audioSettings: [String: Any]?
-
     let audioBufferQueue = DispatchQueue(label: "com.ahmedbekhit.AudioBufferQueue")
 
     private var isRecording: Bool = false
-    
+    // private var firstSample: Bool = false
     var delegate: RecordARDelegate?
     var videoInputOrientation: ARVideoOrientation = .auto
 
+
+ 
     init(output: URL, width: Int, height: Int, adjustForSharing: Bool, audioEnabled: Bool, orientaions:[ARInputViewOrientation], queue: DispatchQueue, allowMix: Bool) {
         super.init()
         do {
@@ -35,7 +40,7 @@ class WritAR: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate {
         } catch {
             fatalError("An error occurred while intializing an AVAssetWriter")
         }
-        
+    
         if audioEnabled {
             if allowMix {
                 let audioOptions: AVAudioSessionCategoryOptions = [.mixWithOthers , .allowBluetooth, .defaultToSpeaker, .interruptSpokenAudioAndMixWithOthers]
@@ -45,10 +50,17 @@ class WritAR: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate {
             AVAudioSession.sharedInstance().requestRecordPermission({ permitted in
                 if permitted {
                     self.prepareAudioDevice(with: queue)
+                    
                 }
             })
         }
         
+       
+        
+//       let videoDataOutput = self.session.outputs[0]
+//        let CaptureConnection = videoDataOutput.connection(with: AVMediaType.video)
+//        CaptureConnection?.preferredVideoStabilizationMode = AVCaptureVideoStabilizationMode.auto
+//
         //HEVC file format only supports A10 Fusion Chip or higher.
         //to support HEVC, make sure to check if the device is iPhone 7 or higher
         videoOutputSettings = [
@@ -57,6 +69,7 @@ class WritAR: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate {
             AVVideoHeightKey: height as AnyObject
         ]
         
+        
 //        let attributes: [String: Bool] = [
 //            kCVPixelBufferCGImageCompatibilityKey as String: true,
 //            kCVPixelBufferCGBitmapContextCompatibilityKey as String: true
@@ -64,8 +77,11 @@ class WritAR: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate {
         videoInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoOutputSettings)
 
         videoInput.expectsMediaDataInRealTime = true
+        
         pixelBufferInput = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: videoInput, sourcePixelBufferAttributes: nil)
 
+   
+        
         var angleEnabled: Bool {
             for v in orientaions {
                 if UIDevice.current.orientation.rawValue == v.rawValue {
@@ -112,6 +128,7 @@ class WritAR: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate {
         
         videoInput.transform = t
         
+     
         if assetWriter.canAdd(videoInput) {
             assetWriter.add(videoInput)
         } else {
@@ -121,6 +138,54 @@ class WritAR: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate {
         assetWriter.shouldOptimizeForNetworkUse = adjustForSharing
     }
     
+
+    
+    func getCamara(of position: AVCaptureDevice.Position) -> AVCaptureDevice? {
+       
+        let devices = AVCaptureDevice.devices(for: AVMediaType.video)
+        for device in devices {
+            if device.position == position {
+                return device
+            }
+        }
+    
+        return devices[0]
+    }
+
+//    func prepareVideoDevice(with queue:DispatchQueue) {
+//        let videoDataOutput = AVCaptureVideoDataOutput()
+//        videoDataOutput.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
+//        videoDataOutput.alwaysDiscardsLateVideoFrames = false
+//        videoDataOutput.setSampleBufferDelegate(self, queue: queue)
+//        guard let camara = getCamara(of: .back) else {
+//            return
+//        }
+//
+//        do {
+//            currentVideoInput = try AVCaptureDeviceInput(device: camara)
+//
+//            // 添加视频输入输出源
+//            if session.canAddInput(currentVideoInput!) && session.canAddOutput(videoDataOutput) {
+//                session.addInput(currentVideoInput!)
+//                session.addOutput(videoDataOutput)
+//
+//                // 防抖
+//                if currentVideoInput!.device.activeFormat.isVideoStabilizationModeSupported(.cinematic) {
+//                    let captureConnection = videoDataOutput.connection(with: AVMediaType.video)
+//                    captureConnection?.preferredVideoStabilizationMode = .auto
+//                }
+//
+//
+//            } else {
+//               return
+//            }
+//
+//
+//        } catch {
+//           return
+//        }
+//
+//    }
     func prepareAudioDevice(with queue: DispatchQueue) {
         let device: AVCaptureDevice = AVCaptureDevice.default(for: .audio)!
         var audioDeviceInput: AVCaptureDeviceInput?
@@ -146,19 +211,57 @@ class WritAR: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate {
             session.addOutput(audioDataOutput)
         }
         
+//        let outputs = session.outputs
+//        if(outputs.count > 0){
+//            let output = outputs[0]
+//            if let connection = output.connection(with: .video), connection.isVideoStabilizationSupported {
+//                connection.preferredVideoStabilizationMode = .auto
+//            }
+//        }
+        
 
         audioSettings = audioDataOutput.recommendedAudioSettingsForAssetWriter(writingTo: .m4v) as? [String: Any]
         
         audioInput = AVAssetWriterInput(mediaType: .audio, outputSettings: audioSettings)
         audioInput.expectsMediaDataInRealTime = true
         
+       // self.prepareVideoDevice(with: queue)
+        
         audioBufferQueue.async {
             self.session.startRunning()
         }
+      
         
         if assetWriter.canAdd(audioInput) {
             assetWriter.add(audioInput)
         }
+        
+//        let camara = getCamara(of: .back)
+//
+//        let videoDataOutput = AVCaptureVideoDataOutput()
+//        videoDataOutput.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
+//        videoDataOutput.alwaysDiscardsLateVideoFrames = false
+//        do {
+//            let currentVideoInput = try AVCaptureDeviceInput(device: camara!)
+//            // 添加视频输入输出源
+//            if session.canAddInput(currentVideoInput) && session.canAddOutput(videoDataOutput) {
+//                session.addInput(currentVideoInput)
+//                session.addOutput(videoDataOutput)
+//                // 防抖
+//                if currentVideoInput.device.activeFormat.isVideoStabilizationModeSupported(.cinematic) {
+//                    let captureConnection = videoDataOutput.connection(with: AVMediaType.video)
+//                    captureConnection?.preferredVideoStabilizationMode = .auto
+//                }
+//
+//
+//            } else {
+//              //
+//            }
+//
+//
+//        } catch {
+//            return
+//        }
     }
     
     var startingVideoTime: CMTime?
@@ -176,6 +279,7 @@ class WritAR: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate {
                 assetWriter.startSession(atSourceTime: startingVideoTime!)
                 session.startRunning()
                 isRecording = true
+        
                 isWritingWithoutError = true
             } else {
                 delegate?.recorder(didFailRecording: assetWriter.error, and: "An error occurred while starting the video session.")
@@ -225,6 +329,7 @@ class WritAR: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate {
     }
 
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+      
         if let input = audioInput {
             audioBufferQueue.async { [weak self] in
                 if input.isReadyForMoreMediaData && (self?.isRecording)! {
@@ -232,6 +337,8 @@ class WritAR: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate {
                 }
             }
         }
+        
+       
     }
     
     func pause() {

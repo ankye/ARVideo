@@ -218,6 +218,8 @@ private var renderer: RenderAR!
                 logAR.message("ERROR:- This device does not support Metal")
                 return
             }
+            
+            
             renderEngine = SCNRenderer(device: mtlDevice, options: nil)
             renderEngine.scene = view.scene
             
@@ -766,6 +768,7 @@ extension RecordAR {
                     
                     self.writer = WritAR(output: self.currentVideoPath!, width: Int(size.width), height: Int(size.height), adjustForSharing: self.adjustVideoForSharing, audioEnabled: self.enableAudio, orientaions: self.inputViewOrientations, queue: self.writerQueue, allowMix: self.enableMixWithOthers)
                     self.writer?.videoInputOrientation = self.videoOrientation
+                    
                     self.writer?.delegate = self.delegate
                 }
             } else if !self.isRecording && self.adjustPausedTime {

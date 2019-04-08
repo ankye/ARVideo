@@ -45,7 +45,7 @@
     recorder.renderAR = self;
     
     // Configure the renderer to perform additional image & video processing 👁
-    recorder.onlyRenderWhileRecording = YES;
+    recorder.onlyRenderWhileRecording = NO;
     
     // Configure ARKit content mode. Default is .auto -- aspectFill is recommended for iPhone10-only apps
     recorder.contentMode = ARFrameModeAuto;
